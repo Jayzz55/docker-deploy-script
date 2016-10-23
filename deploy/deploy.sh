@@ -2,13 +2,20 @@
 
 
 APP_ENV="${APP_ENV:-staging}"
-SERVER_IP="${SERVER_IP:-192.168.1.99}"
+# SERVER_IP="${SERVER_IP:-192.168.1.99}"
+# SSH_USER="${SSH_USER:-$(whoami)}"
+# KEY_USER="${KEY_USER:-$(whoami)}"
+# DOCKER_VERSION="${DOCKER_VERSION:-1.8.3}"
+
+SERVER_IP="${SERVER_IP:-127.0.0.1}"
 SSH_USER="${SSH_USER:-$(whoami)}"
 KEY_USER="${KEY_USER:-$(whoami)}"
-DOCKER_VERSION="${DOCKER_VERSION:-1.8.3}"
+DOCKER_VERSION="${DOCKER_VERSION:-1.12.2}"
+
+REPO_NAME="mobydock"
 
 DOCKER_PULL_IMAGES=("postgres:9.4.5" "redis:2.8.22")
-COPY_UNIT_FILES=("iptables-restore" "swap" "postgres" "redis" "mobydock" "nginx")
+COPY_UNIT_FILES=("iptables-restore" "swap" "postgres" "redis" "${REPO_NAME}" "nginx")
 SSL_CERT_BASE_NAME="productionexample"
 
 
@@ -95,6 +102,8 @@ wget -O "docker.deb https://apt.dockerproject.org/repo/pool/main/d/docker-engine
 sudo dpkg -i docker.deb
 rm docker.deb
 sudo usermod -aG docker "${KEY_USER}"
+sudo service docker restart
+newgrp docker
   '"
   echo "done!"
 }
@@ -110,19 +119,19 @@ function docker_pull () {
 
 function git_init () {
   echo "Initialize git repo and hooks..."
-  scp "git/post-receive/mobydock" "${SSH_USER}@${SERVER_IP}:/tmp/mobydock"
+  scp "git/post-receive/${REPO_NAME}" "${SSH_USER}@${SERVER_IP}:/tmp/${REPO_NAME}"
   scp "git/post-receive/nginx" "${SSH_USER}@${SERVER_IP}:/tmp/nginx"
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
-sudo apt-get update && sudo apt-get install -y -q git
-sudo rm -rf /var/git/mobydock.git /var/git/mobydock /var/git/nginx.git /var/git/nginx
-sudo mkdir -p /var/git/mobydock.git /var/git/mobydock /var/git/nginx.git /var/git/nginx
-sudo git --git-dir=/var/git/mobydock.git --bare init
+sudo apt-get update && sudo apt-get -f install -y && sudo apt-get install -y -q git
+sudo rm -rf /var/git/${REPO_NAME}.git /var/git/${REPO_NAME} /var/git/nginx.git /var/git/nginx
+sudo mkdir -p /var/git/${REPO_NAME}.git /var/git/${REPO_NAME} /var/git/nginx.git /var/git/nginx
+sudo git --git-dir=/var/git/${REPO_NAME}.git --bare init
 sudo git --git-dir=/var/git/nginx.git --bare init
 
-sudo mv /tmp/mobydock /var/git/mobydock.git/hooks/post-receive
+sudo mv /tmp/${REPO_NAME} /var/git/${REPO_NAME}.git/hooks/post-receive
 sudo mv /tmp/nginx /var/git/nginx.git/hooks/post-receive
-sudo chmod +x /var/git/mobydock.git/hooks/post-receive /var/git/nginx.git/hooks/post-receive
-sudo chown ${KEY_USER}:${KEY_USER} -R /var/git/mobydock.git /var/git/mobydock.git /var/git/mobydock /var/git/nginx.git /var/git/nginx
+sudo chmod +x /var/git/${REPO_NAME}.git/hooks/post-receive /var/git/nginx.git/hooks/post-receive
+sudo chown ${KEY_USER}:${KEY_USER} -R /var/git/${REPO_NAME}.git /var/git/${REPO_NAME}.git /var/git/${REPO_NAME} /var/git/nginx.git /var/git/nginx
   '"
   echo "done!"
 }
@@ -169,10 +178,10 @@ sudo systemctl start redis.service
 
 function copy_env_config_files () {
   echo "Copying environment/config files..."
-  scp "${APP_ENV}/.mobydock.env" "${SSH_USER}@${SERVER_IP}:/tmp/.mobydock.env"
+  scp "${APP_ENV}/.${REPO_NAME}.env" "${SSH_USER}@${SERVER_IP}:/tmp/.${REPO_NAME}.env"
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
 sudo mkdir -p /home/${KEY_USER}/config
-sudo mv /tmp/.mobydock.env /home/${KEY_USER}/config/.mobydock.env
+sudo mv /tmp/.${REPO_NAME}.env /home/${KEY_USER}/config/.${REPO_NAME}.env
 sudo chown ${KEY_USER}:${KEY_USER} -R /home/${KEY_USER}/config
   '"
   echo "done!"
@@ -201,8 +210,8 @@ sudo chown root:root -R /etc/ssl
 function run_application () {
   echo "Running the application..."
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
-sudo systemctl enable mobydock.service nginx.service
-sudo systemctl start mobydock.service nginx.service
+sudo systemctl enable ${REPO_NAME}.service nginx.service
+sudo systemctl start ${REPO_NAME}.service nginx.service
   '"
   echo "done!"
 }
