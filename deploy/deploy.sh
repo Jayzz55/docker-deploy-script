@@ -143,6 +143,8 @@ function configure_firewall () {
 sudo mkdir -p /var/lib/iptables
 sudo mv /tmp/rules-save /var/lib/iptables
 sudo chown root:root -R /var/lib/iptables
+sudo systemctl enable iptables-restore.service
+sudo systemctl start iptables-restore.service
   '"
   echo "done!"
 }
@@ -163,8 +165,6 @@ sudo chown ${SSH_USER}:${SSH_USER} /etc/systemd/system/${unit}.service
 function enable_base_units () {
   echo "Enabling base systemd units..."
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
-sudo systemctl enable iptables-restore.service
-sudo systemctl start iptables-restore.service
 sudo systemctl enable swap.service
 sudo systemctl start swap.service
 sudo systemctl enable postgres.service
@@ -223,15 +223,15 @@ function provision_server () {
   echo "---"
   configure_secure_ssh
   echo "---"
+  copy_units
+  echo "---"
+  configure_firewall
+  echo "---"
   install_docker ${1}
   echo "---"
   docker_pull
   echo "---"
   git_init
-  echo "---"
-  configure_firewall
-  echo "---"
-  copy_units
   echo "---"
   enable_base_units
   echo "---"
@@ -260,6 +260,8 @@ ENVIRONMENT VARIABLES:
 
    DOCKER_VERSION   Docker version to install
                     Defaulting to ${DOCKER_VERSION}
+
+   REPO_NAME        Name of the repository
 
 OPTIONS:
    -h|--help                 Show this message
