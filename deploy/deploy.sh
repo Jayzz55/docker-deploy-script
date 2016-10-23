@@ -119,7 +119,7 @@ function docker_pull () {
 
 function git_init () {
   echo "Initialize git repo and hooks..."
-  scp "git/post-receive/${REPO_NAME}" "${SSH_USER}@${SERVER_IP}:/tmp/${REPO_NAME}"
+  scp "git/post-receive/repository" "${SSH_USER}@${SERVER_IP}:/tmp/${REPO_NAME}"
   scp "git/post-receive/nginx" "${SSH_USER}@${SERVER_IP}:/tmp/nginx"
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
 sudo apt-get update && sudo apt-get -f install -y && sudo apt-get install -y -q git
