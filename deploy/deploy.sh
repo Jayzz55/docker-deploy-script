@@ -2,20 +2,16 @@
 
 
 APP_ENV="${APP_ENV:-staging}"
-# SERVER_IP="${SERVER_IP:-192.168.1.99}"
-# SSH_USER="${SSH_USER:-$(whoami)}"
-# KEY_USER="${KEY_USER:-$(whoami)}"
-# DOCKER_VERSION="${DOCKER_VERSION:-1.8.3}"
 
 SERVER_IP="${SERVER_IP:-127.0.0.1}"
 SSH_USER="${SSH_USER:-$(whoami)}"
 KEY_USER="${KEY_USER:-$(whoami)}"
 DOCKER_VERSION="${DOCKER_VERSION:-1.12.2}"
 
-REPO_NAME="mobydock"
+REPO_NAME="${REPO_NAME:-whales}"
 
 DOCKER_PULL_IMAGES=("postgres:9.4.5" "redis:2.8.22")
-COPY_UNIT_FILES=("iptables-restore" "swap" "postgres" "redis" "${REPO_NAME}" "nginx")
+COPY_UNIT_FILES=("iptables-restore" "swap" "nginx" "repository")
 SSL_CERT_BASE_NAME="productionexample"
 
 
@@ -96,7 +92,7 @@ sudo systemctl restart ssh
 function install_docker () {
   echo "Configuring Docker v${1}..."
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
-sudo apt-get update
+sudo apt-get update && sudo apt-get -f install -y
 sudo apt-get install -y -q libapparmor1 aufs-tools ca-certificates
 wget -O "docker.deb https://apt.dockerproject.org/repo/pool/main/d/docker-engine/docker-engine_${1}-0~jessie_amd64.deb"
 sudo dpkg -i docker.deb
@@ -123,6 +119,7 @@ function git_init () {
   scp "git/post-receive/nginx" "${SSH_USER}@${SERVER_IP}:/tmp/nginx"
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
 sudo apt-get update && sudo apt-get -f install -y && sudo apt-get install -y -q git
+sudo apt-get install vim -y
 sudo rm -rf /var/git/${REPO_NAME}.git /var/git/${REPO_NAME} /var/git/nginx.git /var/git/nginx
 sudo mkdir -p /var/git/${REPO_NAME}.git /var/git/${REPO_NAME} /var/git/nginx.git /var/git/nginx
 sudo git --git-dir=/var/git/${REPO_NAME}.git --bare init
@@ -157,8 +154,23 @@ function copy_units () {
     ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
 sudo mv /tmp/${unit}.service /etc/systemd/system
 sudo chown ${SSH_USER}:${SSH_USER} /etc/systemd/system/${unit}.service
+sudo sed -i s/repo_name/${REPO_NAME}/g /etc/systemd/system/${unit}.service
   '"
   done
+  echo "done!"
+
+
+}
+
+function install_docker_compose() {
+  echo "Installing docker compose..."
+  ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
+sudo apt-get install curl -y
+sudo -i
+curl -L "https://github.com/docker/compose/releases/download/1.8.1/docker-compose-$(uname -s)-$(uname -m)" > /usr/local/bin/docker-compose
+exit
+chmod +x /usr/local/bin/docker-compose
+  '"
   echo "done!"
 }
 
@@ -167,16 +179,13 @@ function enable_base_units () {
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
 sudo systemctl enable swap.service
 sudo systemctl start swap.service
-sudo systemctl enable postgres.service
-sudo systemctl start postgres.service
-sudo systemctl enable redis.service
-sudo systemctl start redis.service
   '"
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'sudo systemctl restart docker'"
   echo "done!"
 }
 
 function copy_env_config_files () {
+  echo "hi ${REPO_NAME}"
   echo "Copying environment/config files..."
   scp "${APP_ENV}/.${REPO_NAME}.env" "${SSH_USER}@${SERVER_IP}:/tmp/.${REPO_NAME}.env"
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
@@ -210,8 +219,24 @@ sudo chown root:root -R /etc/ssl
 function run_application () {
   echo "Running the application..."
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
-sudo systemctl enable ${REPO_NAME}.service nginx.service
-sudo systemctl start ${REPO_NAME}.service nginx.service
+sudo systemctl enable repository.service nginx.service
+sudo systemctl start repository.service nginx.service
+  '"
+  echo "done!"
+}
+
+function db_create() {
+  echo "Creating db application..."
+  ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
+docker exec -it "${REPO_NAME}_website_1" rake db:create
+  '"
+  echo "done!"
+}
+
+function db_migrate() {
+  echo "Migrating db application..."
+  ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
+docker exec -it "${REPO_NAME}_website_1" rake db:migrate
   '"
   echo "done!"
 }
@@ -228,6 +253,8 @@ function provision_server () {
   configure_firewall
   echo "---"
   install_docker ${1}
+  echo "---"
+  install_docker_compose
   echo "---"
   docker_pull
   echo "---"
@@ -321,6 +348,12 @@ EXAMPLES:
    Run the application:
         $ deploy -r
 
+   Create db application:
+        $ deploy -dbc
+
+   Migrate db application:
+        $ deploy -dbm
+
    Configure everything together:
         $ deploy -a
 
@@ -355,6 +388,10 @@ case "${1}" in
   ;;
   -d|--docker)
   install_docker "${2:-${DOCKER_VERSION}}"
+  shift
+  ;;
+  -dc|--docker-compose)
+  install_docker_compose
   shift
   ;;
   -l|--docker-pull)
@@ -395,6 +432,14 @@ case "${1}" in
   ;;
   -h|--help)
   help_menu
+  shift
+  ;;
+  -dbc|--db-create)
+  db_create 
+  shift
+  ;;
+  -dbm|--db-migrate)
+  db_migrate 
   shift
   ;;
   *)

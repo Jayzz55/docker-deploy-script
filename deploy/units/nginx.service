@@ -1,7 +1,7 @@
 [Unit]
 Description=Run %p
-Requires=docker.service mobydock.service
-After=docker.service mobydock.service
+Requires=docker.service repository.service
+After=docker.service repository.service
 
 [Service]
 Restart=always
@@ -9,7 +9,8 @@ ExecStartPre=-/usr/bin/docker kill %p
 ExecStartPre=-/usr/bin/docker rm -f %p
 ExecStart=/usr/bin/docker run -t --rm --name %p \
   -p 80:80 -p 443:443 \
-  --link mobydock:mobydock --volumes-from mobydock \
+  --network repo_name_default  \
+  --volumes-from repo_name_website_1  \
   -v /etc/ssl/certs:/etc/ssl/certs \
   -v /etc/ssl/private:/etc/ssl/private %p
 ExecStop=/usr/bin/docker stop %p
