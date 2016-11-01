@@ -7,11 +7,12 @@ SERVER_IP="${SERVER_IP:-127.0.0.1}"
 SSH_USER="${SSH_USER:-$(whoami)}"
 KEY_USER="${KEY_USER:-$(whoami)}"
 DOCKER_VERSION="${DOCKER_VERSION:-1.12.2}"
+DOCKER_COMPOSE_VERSION="${DOCKER_COMPOSE_VERSION:-1.8.1}"
 
 REPO_NAME="${REPO_NAME:-whales}"
 
 DOCKER_PULL_IMAGES=("postgres:9.4.5" "redis:2.8.22")
-COPY_UNIT_FILES=("iptables-restore" "swap" "nginx" "repository")
+COPY_UNIT_FILES=("iptables-restore" "swap" "nginx" "repository" "kibana")
 SSL_CERT_BASE_NAME="productionexample"
 
 
@@ -99,6 +100,9 @@ sudo dpkg -i docker.deb
 rm docker.deb
 sudo usermod -aG docker "${KEY_USER}"
 sudo service docker restart
+echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+echo type exit to get out of second terminal
+echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 newgrp docker
   '"
   echo "done!"
@@ -164,12 +168,18 @@ sudo sed -i s/repo_name/${REPO_NAME}/g /etc/systemd/system/${unit}.service
 
 function install_docker_compose() {
   echo "Installing docker compose..."
+  scp "install/docker-compose.sh" "${SSH_USER}@${SERVER_IP}:/tmp/docker-compose.sh"
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
+sudo apt-get update && sudo apt-get -f install -y
 sudo apt-get install curl -y
+echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+echo "execute the following command lines:"
+echo "1. cd /tmp"
+echo "2. chmod +x ./docker-compose.sh"
+echo "3. DOCKER_COMPOSE_VERSION=${DOCKER_COMPOSE_VERSION} ./docker-compose.sh"
+echo "4. exit"
+echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 sudo -i
-curl -L "https://github.com/docker/compose/releases/download/1.8.1/docker-compose-$(uname -s)-$(uname -m)" > /usr/local/bin/docker-compose
-exit
-chmod +x /usr/local/bin/docker-compose
   '"
   echo "done!"
 }
@@ -185,7 +195,6 @@ sudo systemctl start swap.service
 }
 
 function copy_env_config_files () {
-  echo "hi ${REPO_NAME}"
   echo "Copying environment/config files..."
   scp "${APP_ENV}/.${REPO_NAME}.env" "${SSH_USER}@${SERVER_IP}:/tmp/.${REPO_NAME}.env"
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
@@ -219,8 +228,17 @@ sudo chown root:root -R /etc/ssl
 function run_application () {
   echo "Running the application..."
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
-sudo systemctl enable repository.service nginx.service
-sudo systemctl start repository.service nginx.service
+echo "running repository.service"
+sudo systemctl enable repository.service
+sudo systemctl start repository.service
+
+echo "running kibana.service"
+sudo systemctl enable kibana.service
+sudo systemctl start kibana.service
+
+echo "running nginx.service"
+sudo systemctl enable nginx.service
+sudo systemctl start nginx.service
   '"
   echo "done!"
 }
@@ -241,6 +259,17 @@ docker exec -it "${REPO_NAME}_website_1" rake db:migrate
   echo "done!"
 }
 
+function nginx_http_auth() {
+  echo "Setting up nginx http auth..."
+  scp "nginx/.htpasswd" "${SSH_USER}@${SERVER_IP}:/tmp/.htpasswd"
+  ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
+sudo mkdir /etc/nginx-auth
+sudo mv /tmp/.htpasswd /etc/nginx-auth/htpasswd
+sudo chown root:root -R /etc/nginx-auth
+  '"
+  echo "done!"
+}
+
 function provision_server () {
   configure_sudo
   echo "---"
@@ -254,7 +283,7 @@ function provision_server () {
   echo "---"
   install_docker ${1}
   echo "---"
-  install_docker_compose
+  install_docker_compose ${1}
   echo "---"
   docker_pull
   echo "---"
@@ -265,6 +294,11 @@ function provision_server () {
   copy_env_config_files
   echo "---"
   copy_ssl_certs
+  echo "---"
+  nginx_http_auth
+  echo "---"
+  echo "re-installing docker"
+  install_docker ${1}
 }
 
 
@@ -298,6 +332,7 @@ OPTIONS:
    -k|--ssh-key              Add SSH key
    -s|--ssh                  Configure secure SSH
    -d|--docker               Install Docker
+   -dc|--docker-compose      Install Docker Compose
    -l|--docker-pull          Pull necessary Docker images
    -g|--git-init             Install and initialize git
    -f|--firewall             Configure the iptables firewall
@@ -321,8 +356,8 @@ EXAMPLES:
    Install Docker v${DOCKER_VERSION}:
         $ deploy -d
 
-   Install custom Docker version:
-        $ deploy -d 1.8.1
+   Install Docker Compose v${DOCKER_COMPOSE_VERSION}:
+        $ deploy -dc
 
    Pull necessary Docker images:
         $ deploy -l
@@ -391,7 +426,7 @@ case "${1}" in
   shift
   ;;
   -dc|--docker-compose)
-  install_docker_compose
+  install_docker_compose "${2:-${DOCKER_COMPOSE_VERSION}}"
   shift
   ;;
   -l|--docker-pull)
@@ -440,6 +475,10 @@ case "${1}" in
   ;;
   -dbm|--db-migrate)
   db_migrate 
+  shift
+  ;;
+  -ng-auth|--nginx-auth)
+  nginx_http_auth
   shift
   ;;
   *)

@@ -1,0 +1,14 @@
+[Unit]
+Description=Run %p
+Requires=docker.service repository.service
+After=docker.service repository.service
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker kill %p
+ExecStartPre=-/usr/bin/docker rm -f %p
+ExecStart=/usr/local/bin/docker-compose -f /var/git/repo_name/docker-compose.yml up kibana
+ExecStop=/usr/local/bin/docker-compose  -f /var/git/repo_name/docker-compose.yml stop
+
+[Install]
+WantedBy=multi-user.target

@@ -15,6 +15,10 @@
 -A INPUT -p tcp -m tcp --dport 80 -j ACCEPT
 -A INPUT -p tcp -m tcp --dport 443 -j ACCEPT
 
+# --- Allow the outside world to connect to cadvisor(8080) and kibana(5601)
+-A INPUT -p tcp -m tcp --dport 8080 -j ACCEPT
+-A INPUT -p tcp -m tcp --dport 5601 -j ACCEPT
+
 # --- Allow remote access to Postgres, useful for remote database backups
 #     Uncomment the line below to enable it
 # -A INPUT -p tcp -m tcp --dport 5432 -j ACCEPT
