@@ -1,7 +1,7 @@
 [Unit]
 Description=Run %p
-Requires=docker.service repository.service
-After=docker.service repository.service
+Requires=docker.service
+After=docker.service
 
 [Service]
 Restart=always

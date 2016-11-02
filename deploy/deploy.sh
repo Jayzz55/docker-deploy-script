@@ -228,13 +228,13 @@ sudo chown root:root -R /etc/ssl
 function run_application () {
   echo "Running the application..."
   ssh -t "${SSH_USER}@${SERVER_IP}" bash -c "'
-echo "running repository.service"
-sudo systemctl enable repository.service
-sudo systemctl start repository.service
-
 echo "running kibana.service"
 sudo systemctl enable kibana.service
 sudo systemctl start kibana.service
+
+echo "running repository.service"
+sudo systemctl enable repository.service
+sudo systemctl start repository.service
 
 echo "running nginx.service"
 sudo systemctl enable nginx.service
