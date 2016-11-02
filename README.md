@@ -6,3 +6,8 @@ To deploy, execute `./deploy.sh`, eg:
 The nginx repo that is part of this deploy script is [here](https://github.com/Jayzz55/nginx-deploy-script)
 
 The Rails sample repo that is used as part of this deploy script is [here](https://github.com/Jayzz55/whales-docker)
+
+Part of this deployment strategy is to use NGINX in the forefront to do reverse proxy with following ports:
+* port 80 / 443 - rails app (port 3000)
+* port 5000 - cadvisor (port 8080)
+* port 5001 - kibana (port 5601)
